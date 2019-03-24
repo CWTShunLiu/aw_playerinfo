@@ -12,6 +12,8 @@ local SCRIPT_FILE_ADDR = "https://raw.githubusercontent.com/hyperthegreat/aw_pla
 local VERSION_FILE_ADDR = "https://raw.githubusercontent.com/hyperthegreat/aw_playerinfo/master/version.txt";
 local NETWORK_GET_ADDR = "https://api.shadyretard.io/playerinfo/%s";
 
+local SHOW_WINDOW_CB = gui.Checkbox(gui.Reference("MISC", "Automation", "Other"), "PIT_SHOW_WINDOW_CB", "Show player information", true);
+
 local VERSION_NUMBER = "1.0.0";
 local version_check_done = false;
 local update_downloaded = false;
@@ -233,6 +235,8 @@ callbacks.Register("Draw", function()
         return;
     end
 
+    if (SHOW_WINDOW_CB:GetValue() == false) then return end
+
     if (last_click ~= nil and last_click > globals.RealTime()) then
         last_click = globals.RealTime();
     end
@@ -247,6 +251,8 @@ callbacks.Register("Draw", function()
     if (gui.GetValue("lua_allow_http") == false or gui.GetValue("lua_allow_cfg") == false) then
         return;
     end
+
+    if (SHOW_WINDOW_CB:GetValue() == false) then return end
 
     local mouse_x, mouse_y = input.GetMousePos();
     local left_mouse_down = input.IsButtonDown(1);
