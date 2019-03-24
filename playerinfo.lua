@@ -14,13 +14,14 @@ local NETWORK_GET_ADDR = "https://api.shadyretard.io/playerinfo/%s";
 
 local SHOW_WINDOW_CB = gui.Checkbox(gui.Reference("MISC", "Automation", "Other"), "PIT_SHOW_WINDOW_CB", "Show player information", true);
 
-local VERSION_NUMBER = "1.0.0";
+local VERSION_NUMBER = "1.0.1";
 local version_check_done = false;
 local update_downloaded = false;
 local update_available = false;
 
 local players = {};
 local selected_player_id;
+local fields_to_show;
 local playerinfo_cache = {};
 
 local PLAYERINFO_WINDOW_X, PLAYERINFO_WINDOW_Y = 200, 200;
@@ -94,14 +95,20 @@ local function draw_list(mouse_down)
         end
 
         local w, h = draw.GetTextSize(v:GetName());
-        draw.Text(PLAYERINFO_WINDOW_X + 15, PLAYERINFO_WINDOW_Y + offset, v:GetName());
+		if (h ~= nil) then
+            draw.Text(PLAYERINFO_WINDOW_X + 15, PLAYERINFO_WINDOW_Y + offset, v:GetName());
 
-        if (mouse_down and is_mouse_in_rect(PLAYERINFO_WINDOW_X + 15, PLAYERINFO_WINDOW_Y + offset, 200, h)) then
-            selected_player_id = v:GetIndex();
-            last_click = globals.RealTime();
+            if (mouse_down and is_mouse_in_rect(PLAYERINFO_WINDOW_X + 15, PLAYERINFO_WINDOW_Y + offset, 200, h)) then
+                if (selected_player_id ~= v:GetIndex()) then
+                    selected_player_id = v:GetIndex();
+                    fields_to_show = nil;
+                end
+
+                last_click = globals.RealTime();
+            end
+
+            offset = offset + h;
         end
-
-        offset = offset + h;
     end
 end
 
@@ -115,10 +122,10 @@ local function draw_player_info(mouse_down)
     local info = client.GetPlayerInfo(selected_player_id);
     if (info == nil or info["SteamID"] == nil) then return end
 
+    if (fields_to_show == nil) then
+        fields_to_show = {};
     local playerinfo = playerinfo_cache[info["SteamID"]]
     if (playerinfo == nil) then return end
-
-    local fields_to_show = {};
 
     local summary = playerinfo["summary"];
     if (summary ~= nil) then
@@ -128,7 +135,7 @@ local function draw_player_info(mouse_down)
         table.insert(fields_to_show, { title = "Real name", value = summary["realName"] });
         table.insert(fields_to_show, { title = "Account Created", value = os.date('%Y-%m-%d %H:%M:%S', summary["created"]) });
         table.insert(fields_to_show, { title = "Last logged in", value = os.date('%Y-%m-%d %H:%M:%S', summary["lastLogOff"]) });
-        table.insert(fields_to_show, { title = "Playing CS:GO?", value = summary["gameID"] == 730 });
+        table.insert(fields_to_show, { title = "Playing CS:GO", value = tostring(summary["gameID"] == 730) });
     end
 
     local friends = playerinfo["friends"];
@@ -152,7 +159,7 @@ local function draw_player_info(mouse_down)
     if (statistics ~= nil) then
         local stats = statistics["stats"];
         if (stats ~= nil) then
-            table.insert(fields_to_show, { title = "Total Time Played", value = string.format("%.2f", stats["total_time_played"] / 60 / 60) .. "hours" })
+            table.insert(fields_to_show, { title = "Total Time Played", value = string.format("%.2f", stats["total_time_played"] / 60 / 60) .. " hours" })
             table.insert(fields_to_show, { title = "Total Matches Played", value = stats["total_matches_played"] });
             table.insert(fields_to_show, { title = "Total Matches Won", value = stats["total_matches_won"] });
             table.insert(fields_to_show, { title = "Total Win Ratio", value = string.format("%.2f", stats["total_matches_won"] / stats["total_matches_played"] * 100) .. "%" });
@@ -172,12 +179,15 @@ local function draw_player_info(mouse_down)
             table.insert(fields_to_show, { title = "Achievements", value = 0 });
         end
     end
+end
 
     local offset = 5;
     for _, v in ipairs(fields_to_show) do
-        local w, h = draw.GetTextSize(v["title"] .. ": " .. tostring(v["value"]));
-        draw.Text(PLAYERINFO_WINDOW_X + 245, PLAYERINFO_WINDOW_Y + offset, v["title"] .. ": " .. tostring(v["value"]));
-        offset = offset + h;
+        if (v ~= nil and v["title"] ~= nil and v["value"] ~= nil) then
+            local w, h = draw.GetTextSize(v["title"] .. ": " .. v["value"]);
+            draw.Text(PLAYERINFO_WINDOW_X + 245, PLAYERINFO_WINDOW_Y + offset, v["title"] .. ": " .. v["value"]);
+            offset = offset + h;
+        end
     end
 end
 
@@ -224,13 +234,11 @@ end
 callbacks.Register("Draw", function()
     if (gui.GetValue("lua_allow_http") == false) then
         draw.Color(255, 0, 0, 255);
-        draw.SetFont(ERROR_FONT);
         draw.Text(25, 25, "[SCRIPTSTORE] Allow internet connections from lua needs to be enabled to use this script");
         return;
     end
     if (gui.GetValue("lua_allow_cfg") == false) then
         draw.Color(255, 0, 0, 255);
-        draw.SetFont(ERROR_FONT);
         draw.Text(25, 25, "[SCRIPTSTORE] Allow script/config editing from lua need to be enabled to use this script");
         return;
     end
