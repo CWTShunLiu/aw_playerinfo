@@ -14,12 +14,11 @@ local NETWORK_GET_ADDR = "https://api.shadyretard.io/playerinfo/%s";
 
 local SHOW_WINDOW_CB = gui.Checkbox(gui.Reference("MISC", "Automation", "Other"), "PIT_SHOW_WINDOW_CB", "Show player information", true);
 
-local VERSION_NUMBER = "1.0.1";
+local VERSION_NUMBER = "1.0.2";
 local version_check_done = false;
 local update_downloaded = false;
 local update_available = false;
 
-local players = {};
 local selected_player_id;
 local fields_to_show;
 local playerinfo_cache = {};
@@ -87,20 +86,20 @@ local function draw_list(mouse_down)
     draw.Text(PLAYERINFO_WINDOW_X + 15, PLAYERINFO_WINDOW_Y - 15, "Player List");
 
     local offset = 5;
-    for _, v in ipairs(players) do
+    for steam_id, info in pairs(playerinfo_cache) do
         draw.Color(gui.GetValue('clr_gui_text1'));
 
-        if (selected_player_id ~= nil and selected_player_id == v:GetIndex()) then
+        if (selected_player_id ~= nil and selected_player_id == steam_id) then
             draw.Color(255, 191, 0, 255);
         end
 
-        local w, h = draw.GetTextSize(v:GetName());
+        local w, h = draw.GetTextSize(info["summary"]["nickname"]);
 		if (h ~= nil) then
-            draw.Text(PLAYERINFO_WINDOW_X + 15, PLAYERINFO_WINDOW_Y + offset, v:GetName());
+            draw.Text(PLAYERINFO_WINDOW_X + 15, PLAYERINFO_WINDOW_Y + offset, info["summary"]["nickname"]);
 
             if (mouse_down and is_mouse_in_rect(PLAYERINFO_WINDOW_X + 15, PLAYERINFO_WINDOW_Y + offset, 200, h)) then
-                if (selected_player_id ~= v:GetIndex()) then
-                    selected_player_id = v:GetIndex();
+                if (selected_player_id ~= steam_id) then
+                    selected_player_id = steam_id;
                     fields_to_show = nil;
                 end
 
@@ -119,12 +118,9 @@ local function draw_player_info(mouse_down)
     draw.Text(PLAYERINFO_WINDOW_X + 245, PLAYERINFO_WINDOW_Y - 15, "Player Info");
 
     if (selected_player_id == nil) then return end
-    local info = client.GetPlayerInfo(selected_player_id);
-    if (info == nil or info["SteamID"] == nil) then return end
-
     if (fields_to_show == nil) then
         fields_to_show = {};
-    local playerinfo = playerinfo_cache[info["SteamID"]]
+    local playerinfo = playerinfo_cache[selected_player_id]
     if (playerinfo == nil) then return end
 
     local summary = playerinfo["summary"];
@@ -209,41 +205,48 @@ local function value_in_table(tbl, value)
     return false
 end
 
-local function update_players()
-    players = {};
+local char_to_hex = function(c)
+  return string.format("%%%02X", string.byte(c))
+end
 
+local function urlencode(url)
+  if url == nil then
+    return
+  end
+  url = url:gsub("\n", "\r\n")
+  url = url:gsub("([^%w ])", char_to_hex)
+  url = url:gsub(" ", "+")
+  return url
+end
+
+local function update_players()
     local my_player = entities.GetLocalPlayer();
     if (my_player == nil) then return end
 
-    local players_in_game = entities.FindByClass("CCSPlayer");
-    for _, v in ipairs(players_in_game) do
-        local player_info = client.GetPlayerInfo(v:GetIndex());
-        if (player_info ~= nil and player_info["IsBot"] == false) then
-            table.insert(players, v);
-
-            if (key_in_table(playerinfo_cache, player_info["SteamID"]) == false) then
-                http.Get(string.format(NETWORK_GET_ADDR, player_info["SteamID"]), function(response)
-                    if (response == nil or response == "error") then return end
-                    playerinfo_cache[player_info["SteamID"]] = json.decode(response);
-                end)
-            end
-        end
-    end
+	for i = 1, globals.MaxClients(), 1 do
+		local player_info = client.GetPlayerInfo(i);
+		if (player_info ~= nil and player_info["IsBot"] == false and key_in_table(playerinfo_cache, player_info["SteamID"]) == false) then
+			http.Get(string.format(NETWORK_GET_ADDR, urlencode(player_info["SteamID"])), function(response)
+				if (response == nil or response == "error" or key_in_table(playerinfo_cache, player_info["SteamID"]) == true) then return end
+				playerinfo_cache[player_info["SteamID"]] = json.decode(response);
+			end)
+		end
+	end
 end
 
 callbacks.Register("Draw", function()
     if (gui.GetValue("lua_allow_http") == false) then
         draw.Color(255, 0, 0, 255);
-        draw.Text(25, 25, "[SCRIPTSTORE] Allow internet connections from lua needs to be enabled to use this script");
+        draw.Text(25, 25, "[PIT] Allow internet connections from lua needs to be enabled to use this script");
         return;
     end
     if (gui.GetValue("lua_allow_cfg") == false) then
         draw.Color(255, 0, 0, 255);
-        draw.Text(25, 25, "[SCRIPTSTORE] Allow script/config editing from lua need to be enabled to use this script");
+        draw.Text(25, 25, "[PIT] Allow script/config editing from lua need to be enabled to use this script");
         return;
     end
 
-    if (SHOW_WINDOW_CB:GetValue() == false) then return end
+    if (not gui.Reference("MENU"):IsActive() or SHOW_WINDOW_CB:GetValue() == false) then return end
 
     if (last_click ~= nil and last_click > globals.RealTime()) then
         last_click = globals.RealTime();
